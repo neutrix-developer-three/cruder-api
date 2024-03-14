@@ -8,10 +8,7 @@ export class CodeGenerationController {
 
     @Post()
     generateCode(@Body() data: any): { success: boolean } {
-        // Handle code generation logic here using the service
-        const entityName = data.entityName;
-        const controllerName = data.controllerName;
-        this.codeGenerationService.generate(entityName, controllerName);
+        this.codeGenerationService.generate(data);
         return { success: true };
     }
 }

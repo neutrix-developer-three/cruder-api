@@ -1,16 +1,29 @@
 import * as fs from 'fs';
 import * as path from 'path';
 
-export function generateEntity(entityName: string): void {
+interface SchemaProperty {
+    name: string;
+    type: string;
+}
+
+export function generateEntity(entityName: string, schemaProperties: SchemaProperty[]): void {
+    const properties = schemaProperties.map(prop => `@Prop() ${prop.name}: ${prop.type};`).join('\n');
+
     const entityTemplate = `
-        export class ${entityName} {
-            // entity properties and methods
+        import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
+        import { Document } from 'mongoose';
+
+        @Schema()
+        export class ${entityName} extends Document {
+            ${properties}
         }
+
+        export const ${entityName}Schema = SchemaFactory.createForClass(${entityName});
     `;
 
     const componentDir = path.join(
         process.cwd(),
-        "src/modules",
+        "src/modules/cms",
         entityName,
         "entities"
     );
@@ -21,7 +34,7 @@ export function generateEntity(entityName: string): void {
             fs.mkdirSync(componentDir, { recursive: true });
         }
 
-        const componentFilePath = path.join(componentDir, `${entityName}.entities.ts`);
+        const componentFilePath = path.join(componentDir, `${entityName}.entity.ts`);
         fs.writeFileSync(componentFilePath, entityTemplate);
     } catch (error) {
         console.error(`Error generating entity ${entityName}:`, error);
@@ -30,17 +43,29 @@ export function generateEntity(entityName: string): void {
 
 export function generateController(controllerName: string): void {
     const controllerTemplate = `
-        import { Controller } from '@nestjs/common';
+        import { Controller, Get, Post, Body } from '@nestjs/common';
+        import { ${controllerName}Service } from './${controllerName}.service';
+        import { ${controllerName} } from './entities/${controllerName}.entity';
 
         @Controller('${controllerName}')
         export class ${controllerName}Controller {
-            // controller methods
+            constructor(private readonly ${controllerName}Service: ${controllerName}Service) {}
+
+            @Get()
+            async findAll(): Promise<${controllerName}[]> {
+                return this.${controllerName}Service.findAll();
+            }
+
+            @Post()
+            async create(@Body() ${controllerName.toLowerCase()}: ${controllerName}): Promise<${controllerName}> {
+                return this.${controllerName}Service.create(${controllerName.toLowerCase()});
+            }
         }
     `;
 
     const componentDir = path.join(
         process.cwd(),
-        "src/modules",
+        "src/modules/cms",
         controllerName
     );
 
@@ -56,4 +81,5 @@ export function generateController(controllerName: string): void {
         console.error(`Error generating controller ${controllerName}:`, error);
     }
 }
+
 
