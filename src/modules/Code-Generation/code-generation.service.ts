@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import * as fs from 'fs';
-import { generateController, generateEntity, generateModule, generateRepository, generateService } from 'src/utils/codeGenerator';
+import { generateBaseDTO, generateController, generateEntity, generateModule, generateRepository, generateService, generateUpdateDTO } from 'src/utils/codeGenerator';
 
 @Injectable()
 export class CodeGenerationService {
@@ -12,6 +12,8 @@ export class CodeGenerationService {
         const moduleName = data.feature;
         const schemaProperties = data.schemaProperties;
         generateEntity(entityName, schemaProperties);
+        generateBaseDTO(entityName, schemaProperties);
+        generateUpdateDTO(entityName);
         generateController(controllerName);
         generateService(serviceName, entityName);
         generateRepository(repositoryName, entityName);

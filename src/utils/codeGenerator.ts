@@ -11,20 +11,20 @@ export function generateEntity(entityName: string, schemaProperties: SchemaPrope
 
     const entityTemplate = `
         import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-        import { Document } from 'mongoose';
-
-        @Schema()
-        export class ${entityName} extends Document {
+        import { AbstractDocument } from '../../../../core/abstract-entity';
+        
+        @Schema({ timestamps: true, id: true, versionKey: false })
+        export class ${entityName}CMS extends AbstractDocument {
             ${properties}
         }
-
-        export const ${entityName}Schema = SchemaFactory.createForClass(${entityName});
+        
+        export const ${entityName}CMSSchema = SchemaFactory.createForClass(${entityName}CMS);
     `;
 
     const componentDir = path.join(
         process.cwd(),
         "src/modules/cms",
-        entityName,
+        entityName.toLowerCase(),
         "entities"
     );
 
@@ -34,31 +34,112 @@ export function generateEntity(entityName: string, schemaProperties: SchemaPrope
             fs.mkdirSync(componentDir, { recursive: true });
         }
 
-        const componentFilePath = path.join(componentDir, `${entityName}.entity.ts`);
+        const componentFilePath = path.join(componentDir, `${entityName?.toLowerCase()}-cms.entity.ts`);
         fs.writeFileSync(componentFilePath, entityTemplate);
     } catch (error) {
         console.error(`Error generating entity ${entityName}:`, error);
     }
 }
 
+export function generateBaseDTO(dtoName: string, schemaProperties: SchemaProperty[]): void {
+    const properties = schemaProperties.map(prop => `@IsNotEmpty() ${prop.name}: ${prop.type};`).join('\n');
+
+    const dtoTemplate = `
+        import { IsNotEmpty, IsOptional } from "class-validator";
+
+        export class Base${dtoName}CMSDto {
+            ${properties}
+        }
+    `;
+
+    const componentDir = path.join(
+        process.cwd(),
+        "src/modules/cms",
+        dtoName.toLowerCase(),
+        "dto"
+    );
+
+    try {
+        // Create Entity Directory
+        if (!fs.existsSync(componentDir)) {
+            fs.mkdirSync(componentDir, { recursive: true });
+        }
+
+        const componentFilePath = path.join(componentDir, `base-${dtoName?.toLowerCase()}-cms.dto.ts`);
+        fs.writeFileSync(componentFilePath, dtoTemplate);
+    } catch (error) {
+        console.error(`Error generating entity ${dtoName}:`, error);
+    }
+}
+
+export function generateUpdateDTO(dtoName: string): void {
+
+    const dtoTemplate = `
+        import { PartialType } from "@nestjs/mapped-types";
+        import { Base${dtoName}CMSDto } from "./base-${dtoName.toLowerCase()}-cms.dto";
+        
+        export class Update${dtoName}CMSDto extends PartialType(Base${dtoName}CMSDto) {
+        }
+    `;
+
+    const componentDir = path.join(
+        process.cwd(),
+        "src/modules/cms",
+        dtoName.toLowerCase(),
+        "dto"
+    );
+
+    try {
+        // Create Entity Directory
+        if (!fs.existsSync(componentDir)) {
+            fs.mkdirSync(componentDir, { recursive: true });
+        }
+
+        const componentFilePath = path.join(componentDir, `update-${dtoName?.toLowerCase()}-cms.dto.ts`);
+        fs.writeFileSync(componentFilePath, dtoTemplate);
+    } catch (error) {
+        console.error(`Error generating entity ${dtoName}:`, error);
+    }
+}
+
 export function generateController(controllerName: string): void {
+
     const controllerTemplate = `
-        import { Controller, Get, Post, Body } from '@nestjs/common';
-        import { ${controllerName}Service } from './${controllerName}.service';
-        import { ${controllerName} } from './entities/${controllerName}.entity';
+        import { Body, Controller, Get, HttpCode, HttpStatus, Post, UploadedFiles, UseGuards, UseInterceptors } from "@nestjs/common";
+        import { FileFieldsInterceptor } from "@nestjs/platform-express";
+        import { AdminAuthGuard } from "src/core/guards/admin-auth.guard";
+        import { UploadedMulterFileI } from "src/modules/SpacesModule/SpacesService";
+        import { Constants } from "src/utils/constants";
+        import { ${controllerName}CMSService } from "./${controllerName.toLowerCase()}-cms.service";
+        import { Update${controllerName}CMSDto } from "./dto/update-${controllerName.toLowerCase()}-cms.dto";
 
-        @Controller('${controllerName}')
-        export class ${controllerName}Controller {
-            constructor(private readonly ${controllerName}Service: ${controllerName}Service) {}
+        @Controller({ path: "${controllerName.toLowerCase()}-cms", version: Constants.API_VERSION_1 })
 
-            @Get()
-            async findAll(): Promise<${controllerName}[]> {
-                return this.${controllerName}Service.findAll();
+        export class ${controllerName}CMSController {
+            constructor(private readonly service: ${controllerName}CMSService) {
             }
 
             @Post()
-            async create(@Body() ${controllerName.toLowerCase()}: ${controllerName}): Promise<${controllerName}> {
-                return this.${controllerName}Service.create(${controllerName.toLowerCase()});
+            @HttpCode(HttpStatus.OK)
+            @UseGuards(AdminAuthGuard)
+            @UseInterceptors(FileFieldsInterceptor(
+                [
+                    { name: "image", maxCount: 1 }
+                ]
+            ))
+            updateOrCreateData(
+                @Body() dto: Update${controllerName}CMSDto,
+                @UploadedFiles() files: {
+                    image?: UploadedMulterFileI
+                }
+            ) {
+                return this.service.updateOrCreateData(dto, files);
+            }
+
+            @Get()
+            // @UseGuards(AdminAuthGuard)
+            findAll() {
+                return this.service.findAll();
             }
         }
     `;
@@ -66,7 +147,7 @@ export function generateController(controllerName: string): void {
     const componentDir = path.join(
         process.cwd(),
         "src/modules/cms",
-        controllerName
+        controllerName.toLowerCase()
     );
 
     try {
@@ -75,7 +156,7 @@ export function generateController(controllerName: string): void {
             fs.mkdirSync(componentDir, { recursive: true });
         }
 
-        const componentFilePath = path.join(componentDir, `${controllerName}.controller.ts`);
+        const componentFilePath = path.join(componentDir, `${controllerName.toLowerCase()}-cms.controller.ts`);
         fs.writeFileSync(componentFilePath, controllerTemplate);
     } catch (error) {
         console.error(`Error generating controller ${controllerName}:`, error);
@@ -83,25 +164,66 @@ export function generateController(controllerName: string): void {
 }
 
 export function generateService(serviceName: string, entityName: string): void {
+
     const serviceTemplate = `
-        import { Injectable } from '@nestjs/common';
-        import { InjectModel } from '@nestjs/mongoose';
-        import { Model } from 'mongoose';
-        import { ${entityName} } from './entities/${entityName}.entity';
-
+        import { BadRequestException, HttpException, HttpStatus, Injectable } from "@nestjs/common";
+        import { InjectModel } from "@nestjs/mongoose";
+        import { Model } from "mongoose";
+        import { UploadedMulterFileI } from "src/modules/SpacesModule/SpacesService";
+        import { DoSpacesService } from "src/modules/SpacesModule/SpacesService/doSpacesService";
+        import { Constants } from "src/utils/constants";
+        import { ResponseUtils } from "src/utils/response.utils";
+        import { ${serviceName}CMSRepository } from "./${serviceName.toLowerCase()}-cms.repository";
+        import { Update${serviceName}CMSDto } from './dto/update-${serviceName.toLowerCase()}-cms.dto';
+        import { ${serviceName}CMS } from "./schema/${serviceName.toLowerCase()}-cms.schema";
+        
         @Injectable()
-        export class ${serviceName}Service {
+        export class ${serviceName}CMSService {
             constructor(
-                @InjectModel(${entityName}.name) private readonly ${entityName.toLowerCase()}Model: Model<${entityName}>
-            ) {}
-
-            async findAll(): Promise<${entityName}[]> {
-                return this.${entityName.toLowerCase()}Model.find().exec();
+                private readonly doSpaceService: DoSpacesService,
+                @InjectModel('${serviceName.toLowerCase()}_cms')
+                private readonly ${serviceName.toLowerCase()}CMSModel: Model<${serviceName}CMS>
+            ) { }
+        
+            private readonly ${serviceName.toLowerCase()}CMSRepository =
+                new ${serviceName}CMSRepository(this.${serviceName.toLowerCase()}CMSModel);
+        
+            async updateOrCreateData(
+                dto: Update${serviceName}CMSDto,
+                files: {
+                    image?: UploadedMulterFileI
+                }
+            ): Promise<${serviceName}CMS | Error> {
+                if (files && files.image) {
+                    const image: any = await this.doSpaceService.uploadFile(files.image[0], "${serviceName}CMS/");
+                    dto.image = image;
+                }
+                const isExists = await this.${serviceName.toLowerCase()}CMSRepository.findOneByFilterQuery({ isDeleted: false });
+                if (!isExists) {
+                    const data = await this.${serviceName.toLowerCase()}CMSRepository.createEntity(dto);
+                    if (!data) {
+                        throw new BadRequestException("Failed to create data!");
+                    }
+                    return ResponseUtils.successResponseHandler(201, "Data created successfully!", "data", data);
+                } else {
+                    const id = isExists?._id.toString();
+                    const data = await this.${serviceName.toLowerCase()}CMSRepository.updateEntity(id, dto);
+                    if (!data) {
+                        throw new BadRequestException("Failed to update data!");
+                    }
+                    return ResponseUtils.successResponseHandler(200, "Data updated successfully!", "data", data);
+                }
             }
-
-            async create(${entityName.toLowerCase()}: ${entityName}): Promise<${entityName}> {
-                const created${entityName} = new this.${entityName.toLowerCase()}Model(${entityName.toLowerCase()});
-                return created${entityName}.save();
+        
+            async findAll(): Promise<${serviceName}CMS[] | Error> {
+                const data = await this.${serviceName.toLowerCase()}CMSRepository.findAll();
+                if (!data) {
+                    throw new HttpException(
+                        Constants.NOT_FOUND,
+                        HttpStatus.NOT_FOUND
+                    );
+                }
+                return ResponseUtils.successResponseHandler(200, "Data fetched successfully", "data", data);
             }
         }
     `;
@@ -109,7 +231,7 @@ export function generateService(serviceName: string, entityName: string): void {
     const componentDir = path.join(
         process.cwd(),
         "src/modules/cms",
-        serviceName
+        serviceName.toLowerCase()
     );
 
     try {
@@ -118,7 +240,7 @@ export function generateService(serviceName: string, entityName: string): void {
             fs.mkdirSync(componentDir, { recursive: true });
         }
 
-        const componentFilePath = path.join(componentDir, `${serviceName}.service.ts`);
+        const componentFilePath = path.join(componentDir, `${serviceName?.toLowerCase()}-cms.service.ts`);
         fs.writeFileSync(componentFilePath, serviceTemplate);
     } catch (error) {
         console.error(`Error generating service ${serviceName}:`, error);
@@ -126,37 +248,62 @@ export function generateService(serviceName: string, entityName: string): void {
 }
 
 export function generateRepository(repositoryName: string, entityName: string): void {
+
     const repositoryTemplate = `
-        import { Injectable } from '@nestjs/common';
-        import { InjectModel } from '@nestjs/mongoose';
-        import { Model } from 'mongoose';
-        import { ${entityName} } from './entities/${entityName}.entity';
+        import mongoose, { Model, Types } from 'mongoose';
+        import { Update${repositoryName}CMSDto } from './dto/update-${repositoryName.toLowerCase()}-cms.dto';
+        import { ${repositoryName}CMS } from './entites/${repositoryName.toLowerCase()}-cms.entity';
 
-        @Injectable()
-        export class ${repositoryName}Repository {
-            constructor(
-                @InjectModel(${entityName}.name) private readonly ${entityName.toLowerCase()}Model: Model<${entityName}>
-            ) {}
+        export class ${repositoryName}CMSRepository<${repositoryName}CMSDocument extends ${repositoryName}CMS> {
+            constructor(private readonly model: Model<${repositoryName}CMSDocument>) { }
 
-            async findAll(): Promise<${entityName}[]> {
-                return this.${entityName.toLowerCase()}Model.find().exec();
+            async createEntity(data: Update${repositoryName}CMSDto): Promise<${repositoryName}CMSDocument> {
+                try {
+                    const createdEntity = new this.model({
+                        ...data,
+                        _id: new Types.ObjectId()
+                    });
+                    return await createdEntity.save();
+                } catch (err) {
+                    console.log(err);
+                }
             }
 
-            async findById(id: string): Promise<${entityName} | null> {
-                return this.${entityName.toLowerCase()}Model.findById(id).exec();
+            async findOneEntity(id: string): Promise<${repositoryName}CMSDocument | null> {
+                if (!mongoose.Types.ObjectId.isValid(id)) {
+                    return null;
+                }
+                return await this.model.findOne({ _id: id, isDeleted: false });
             }
 
-            async create(${entityName.toLowerCase()}: ${entityName}): Promise<${entityName}> {
-                const created${entityName} = new this.${entityName.toLowerCase()}Model(${entityName.toLowerCase()});
-                return created${entityName}.save();
+            async updateEntity(id: string, data: Update${repositoryName}CMSDto): Promise<${repositoryName}CMSDocument | null> {
+                try {
+                    return await this.model.findByIdAndUpdate(id, data, { new: true });
+                } catch (err) {
+                    console.log(err);
+                }
             }
 
-            async update(id: string, ${entityName.toLowerCase()}: ${entityName}): Promise<${entityName} | null> {
-                return this.${entityName.toLowerCase()}Model.findByIdAndUpdate(id, ${entityName.toLowerCase()}, { new: true }).exec();
+            async deleteEntity(id: string): Promise<boolean> {
+                const data = await this.model.findByIdAndUpdate(
+                    id,
+                    { isDeleted: true },
+                    { new: true }
+                );
+                if (data) return true;
+                return false;
             }
 
-            async delete(id: string): Promise<${entityName} | null> {
-                return this.${entityName.toLowerCase()}Model.findByIdAndDelete(id).exec();
+            async findAll(): Promise<${repositoryName}CMSDocument[]> {
+                return await this.model.find({ isDeleted: false });
+            }
+
+            async findOneByFilterQuery(query: any): Promise<${repositoryName}CMSDocument | null> {
+                return await this.model.findOne({ ...query, isDeleted: false }).lean();
+            }
+
+            async findByFilterQuery(query: any): Promise<${repositoryName}CMSDocument[] | null> {
+                return await this.model.find({ ...query, isDeleted: false }).lean();
             }
         }
     `;
@@ -164,7 +311,7 @@ export function generateRepository(repositoryName: string, entityName: string): 
     const componentDir = path.join(
         process.cwd(),
         "src/modules/cms",
-        repositoryName
+        repositoryName.toLowerCase()
     );
 
     try {
@@ -173,7 +320,7 @@ export function generateRepository(repositoryName: string, entityName: string): 
             fs.mkdirSync(componentDir, { recursive: true });
         }
 
-        const componentFilePath = path.join(componentDir, `${repositoryName}.repository.ts`);
+        const componentFilePath = path.join(componentDir, `${repositoryName?.toLowerCase()}-cms.repository.ts`);
         fs.writeFileSync(componentFilePath, repositoryTemplate);
     } catch (error) {
         console.error(`Error generating repository ${repositoryName}:`, error);
@@ -181,26 +328,41 @@ export function generateRepository(repositoryName: string, entityName: string): 
 }
 
 export function generateModule(moduleName: string, serviceName: string, repositoryName: string, entityName: string, controllerName: string): void {
-    const moduleTemplate = `
-        import { Module } from '@nestjs/common';
-        import { MongooseModule } from '@nestjs/mongoose';
-        import { ${serviceName} } from './${serviceName}.service';
-        import { ${repositoryName}Repository } from './${repositoryName}.repository';
-        import { ${entityName}, ${entityName}Schema } from './entities/${entityName}.entity';
-        import { ${controllerName}Controller } from './${controllerName}.controller';
 
+    const moduleTemplate = `
+        import { Module } from "@nestjs/common";
+        import { JwtModule } from "@nestjs/jwt";
+        import { MongooseModule } from "@nestjs/mongoose";
+        import JwtConfigService from "src/core/jwt/jwt-config.service";
+        import JwtHelper from "src/core/jwt/jwt.helper";
+        import { DoSpacesServicerovider } from "src/modules/SpacesModule/SpacesService";
+        import { DoSpacesService } from "src/modules/SpacesModule/SpacesService/doSpacesService";
+        import { UsersSchema } from "../../CRUD/users/schema/users.schema";
+        import { ${controllerName}CMSController } from "./${controllerName.toLowerCase()}-cms.controller";
+        import { ${serviceName}CMSService } from "./${serviceName.toLowerCase()}-cms.service";
+        import { ${entityName}CMSSchema } from "./entities/${entityName.toLowerCase()}-cms.entity";
+        
         @Module({
-            imports: [MongooseModule.forFeature([{ name: ${entityName}.name, schema: ${entityName}Schema }])],
-            controllers: [${controllerName}Controller],
-            providers: [${serviceName}, ${repositoryName}Repository],
+            imports: [
+                JwtModule.registerAsync({
+                    useClass: JwtConfigService
+                }),
+                MongooseModule.forFeature([
+                    { name: 'Users', schema: UsersSchema },
+                    { name: '${entityName.toLowerCase()}_cms', schema: ${entityName}CMSSchema },
+                ]),
+            ],
+            controllers: [${controllerName}CMSController],
+            providers: [${serviceName}CMSService, JwtHelper, DoSpacesService, DoSpacesServicerovider]
         })
-        export class ${moduleName}Module {}
+        export class ${moduleName}CMSModule {
+        }
     `;
 
     const moduleDir = path.join(
         process.cwd(),
         "src/modules/cms",
-        moduleName
+        moduleName.toLowerCase()
     );
 
     try {
@@ -209,12 +371,9 @@ export function generateModule(moduleName: string, serviceName: string, reposito
             fs.mkdirSync(moduleDir, { recursive: true });
         }
 
-        const moduleFilePath = path.join(moduleDir, `${moduleName}.module.ts`);
+        const moduleFilePath = path.join(moduleDir, `${moduleName?.toLowerCase()}-cms.module.ts`);
         fs.writeFileSync(moduleFilePath, moduleTemplate);
     } catch (error) {
         console.error(`Error generating module ${moduleName}:`, error);
     }
 }
-
-
-
