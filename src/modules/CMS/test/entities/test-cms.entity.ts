@@ -4,8 +4,8 @@
         
         @Schema({ timestamps: true, id: true, versionKey: false })
         export class TestCMS extends AbstractDocument {
-            @Prop() Phone: string;
-@Prop() Name: string;
+            @Prop({ default: null, nullable: true }) name: string;
+@Prop({ default: null, nullable: true }) phone: string;
         }
         
         export const TestCMSSchema = SchemaFactory.createForClass(TestCMS);

@@ -7,7 +7,7 @@ interface SchemaProperty {
 }
 
 export function generateEntity(entityName: string, schemaProperties: SchemaProperty[]): void {
-    const properties = schemaProperties.map(prop => `@Prop() ${prop.name}: ${prop.type};`).join('\n');
+    const properties = schemaProperties.map(prop => `@Prop({ default: null, nullable: true }) ${prop.name}: ${prop.type};`).join('\n');
 
     const entityTemplate = `
         import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
@@ -42,7 +42,7 @@ export function generateEntity(entityName: string, schemaProperties: SchemaPrope
 }
 
 export function generateBaseDTO(dtoName: string, schemaProperties: SchemaProperty[]): void {
-    const properties = schemaProperties.map(prop => `@IsNotEmpty() ${prop.name}: ${prop.type};`).join('\n');
+    const properties = schemaProperties.map(prop => `@IsOptional() ${prop.name}?: ${prop.type};`).join('\n');
 
     const dtoTemplate = `
         import { IsNotEmpty, IsOptional } from "class-validator";
@@ -175,7 +175,7 @@ export function generateService(serviceName: string, entityName: string): void {
         import { ResponseUtils } from "src/utils/response.utils";
         import { ${serviceName}CMSRepository } from "./${serviceName.toLowerCase()}-cms.repository";
         import { Update${serviceName}CMSDto } from './dto/update-${serviceName.toLowerCase()}-cms.dto';
-        import { ${serviceName}CMS } from "./schema/${serviceName.toLowerCase()}-cms.schema";
+        import { ${serviceName}CMS } from "./entities/${serviceName.toLowerCase()}-cms.entity";
         
         @Injectable()
         export class ${serviceName}CMSService {
@@ -252,7 +252,7 @@ export function generateRepository(repositoryName: string, entityName: string): 
     const repositoryTemplate = `
         import mongoose, { Model, Types } from 'mongoose';
         import { Update${repositoryName}CMSDto } from './dto/update-${repositoryName.toLowerCase()}-cms.dto';
-        import { ${repositoryName}CMS } from './entites/${repositoryName.toLowerCase()}-cms.entity';
+        import { ${repositoryName}CMS } from './entities/${repositoryName.toLowerCase()}-cms.entity';
 
         export class ${repositoryName}CMSRepository<${repositoryName}CMSDocument extends ${repositoryName}CMS> {
             constructor(private readonly model: Model<${repositoryName}CMSDocument>) { }

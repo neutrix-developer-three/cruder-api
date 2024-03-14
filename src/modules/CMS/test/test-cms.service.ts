@@ -8,7 +8,7 @@
         import { ResponseUtils } from "src/utils/response.utils";
         import { TestCMSRepository } from "./test-cms.repository";
         import { UpdateTestCMSDto } from './dto/update-test-cms.dto';
-        import { TestCMS } from "./schema/test-cms.schema";
+        import { TestCMS } from "./entities/test-cms.entity";
         
         @Injectable()
         export class TestCMSService {

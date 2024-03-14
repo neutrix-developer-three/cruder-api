@@ -9,7 +9,7 @@
         import { UsersSchema } from "../../CRUD/users/schema/users.schema";
         import { TestCMSController } from "./test-cms.controller";
         import { TestCMSService } from "./test-cms.service";
-        import { TestCMSSchema } from "./entities/test-cms.schema";
+        import { TestCMSSchema } from "./entities/test-cms.entity";
         
         @Module({
             imports: [
